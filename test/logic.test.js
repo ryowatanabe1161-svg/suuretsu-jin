@@ -249,7 +249,7 @@ function onTable(table) { var s = {}; table.forEach(function (m) { m.forEach(fun
   assert(eq(ws.hand, [extra]) && ws.table.length === 1 && ws.table[0].length === 3, '戻すと番の最初の形');
 })();
 
-// スクリーンショットの「山吹2-3-4」は、途中の作業はできても決定できない
+// 同じランから山吹3と4を両方抜くと残りが1-2になり、決定できない（別解釈）
 (function () {
   var y1 = tid(3, 1, 0), y2 = tid(3, 2, 0), y3 = tid(3, 3, 0), y4 = tid(3, 4, 0);
   var y1b = tid(3, 1, 1), y2h = tid(3, 2, 1);
@@ -266,6 +266,30 @@ function onTable(table) { var s = {}; table.forEach(function (m) { m.forEach(fun
   assert(!L.meld(parked.table.filter(function (m) { return m.indexOf(y1b) >= 0; })[0]).ok, '1の組にはすでに山吹があるので足せない');
   var dumped = L.wsMove(L.wsNew(G.table, hand), [y2h], 0);
   assert(!L.meld(dumped.table[0]).ok, '山吹1-2-3-4に手札の山吹2を足すだけでも重なる');
+})();
+
+// 3の4枚グループから山吹3、山吹1-2-3-4から山吹4、手札の山吹2で新しいラン
+(function () {
+  var y1 = tid(3, 1, 0), y2 = tid(3, 2, 0), y3run = tid(3, 3, 0), y4run = tid(3, 4, 0);
+  var y3g = tid(3, 3, 1), y2h = tid(3, 2, 1);
+  var group3 = [tid(0, 3, 0), tid(1, 3, 0), tid(2, 3, 0), y3g];
+  var run = [y1, y2, y3run, y4run];
+  var group4 = [tid(1, 4, 0), tid(2, 4, 0), tid(3, 4, 1)];
+  var hand = [y2h, tid(1, 2, 0), tid(2, 1, 1), tid(2, 7, 0)];
+  var G = game([group3, run, group4], hand, true);
+  var ws = L.wsMove(L.wsNew(G.table, hand), [y3g, y4run, y2h], -1);
+  assert(L.wsAudit(ws, G.table, hand).ok, '組をまたいで借りてもタイルは増えない');
+  var rest3 = ws.table.filter(function (m) { return m.indexOf(tid(0, 3, 0)) >= 0; })[0];
+  var restRun = ws.table.filter(function (m) { return m.indexOf(y1) >= 0; })[0];
+  var neu = ws.table.filter(function (m) { return m.indexOf(y2h) >= 0; })[0];
+  assert(rest3 && rest3.length === 3 && L.meld(rest3).ok && rest3.indexOf(y3g) < 0, '3のグループは墨・紅・藍の3枚で残る');
+  assert(restRun && eq(restRun.slice().sort(), [y1, y2, y3run].sort()) && L.meld(restRun).ok, '山吹ランは1-2-3で残る');
+  assert(neu && eq(neu.slice().sort(), [y2h, y3g, y4run].sort()) && L.meld(neu).ok, '新しい組は山吹2-3-4');
+  assert(ws.table.every(function (m) { return L.meld(m).ok; }), '場のすべての組が正しい');
+  var c = L.checkCommit(G, 0, ws.table);
+  assert(!c.err && c.placed.length === 1 && c.placed[0] === y2h, '手札の山吹2を出したこの手は決定できる');
+  var res = L.commit(JSON.parse(JSON.stringify(G)), 0, ws.table);
+  assert(!res.err, 'commit も通る');
 })();
 
 // ふーさんが打ってもタイルは保存され、ルール違反の手は出さない
