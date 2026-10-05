@@ -131,6 +131,7 @@
     var st = G.st, p = st.turn, o = G.pl[p];
     if (st.over) return null;
     if (!o || o.kind !== 'human' || o.sid !== sid) return ERR.turn;
+    if (m.g !== R.gameNo || m.n !== st.moves) return 'STALE';   // 古い画面からの操作（二度押し・通信の遅れ）は無視
     if (m.t === 'draw') { doDraw(p); return null; }
     if (m.t === 'commit') {
       if (!Array.isArray(m.table) || m.table.length > 60) return ERR.bad;
@@ -218,7 +219,7 @@
     }
     if (R.phase !== 'game' || msg.g !== R.gameNo || msg.n !== R.G.st.moves) return;
     var err = hostAction(seat.sid, msg);
-    if (err) { try { conn.send({ t: 'error', msg: err }); conn.send(viewFor(seat.sid)); } catch (e) {} }
+    if (err) { try { conn.send({ t: 'error', msg: err === 'STALE' ? '' : err }); conn.send(viewFor(seat.sid)); } catch (e) {} }
   }
   function hostJoin(conn, msg) {
     var R = host.room, name = cleanName(msg.name), cid = String(msg.clientId || '').slice(0, 40);
@@ -355,7 +356,7 @@
     else if (m.t === 'reject') { connecting(false); leaveClient(false); alertBox(m.msg); }
     else if (m.t === 'kicked') { sstore(SS_CLIENT, null); leaveClient(false); alertBox('ホストによって部屋から外されました。'); }
     else if (m.t === 'closed') { sstore(SS_CLIENT, null); leaveClient(false); alertBox('ホストが部屋を閉じました。'); }
-    else if (m.t === 'error') { pending = ''; toast(m.msg); stageKey = ''; if (lastView) render(lastView); }
+    else if (m.t === 'error') { pending = ''; if (m.msg) toast(m.msg); stageKey = ''; if (lastView) render(lastView); }
   }
   function clientHeartbeat() {
     if (!client) return;
@@ -387,7 +388,7 @@
   function act(m) {
     var v = lastView; if (!v || v.phase !== 'game') return;
     m.g = v.gameNo; m.n = v.g.n;
-    if (host) { var err = hostAction(1, m); if (err) toast(err); return; }
+    if (host) { var err = hostAction(1, m); if (err && err !== 'STALE') toast(err); return; }
     var key = m.t + ':' + m.n;
     if (pending === key) return;
     if (send(m)) pending = key;
@@ -485,13 +486,19 @@
   function myTurnNow(v) { return v.g.me >= 0 && v.g.turn === v.g.me && !v.g.over && v.g.wait <= 0; }
   function pseudoG(v) { var g = v.g, hands = [], opened = []; g.players.forEach(function (P, p) { hands.push(p === g.me ? g.hand : []); opened.push(P.opened); }); return { hands: hands, table: g.table, opened: opened, pool: { length: g.pool }, n: g.players.length, turn: g.turn, over: g.over }; }
   function onTable0(v) { var m = {}; v.g.table.forEach(function (x) { x.forEach(function (id) { m[id] = 1; }); }); return m; }
-  function changed() { return ui.ws && ui.ws.hand.length !== lastView.g.hand.length; }
+  function changed() { return !!(ui.ws && lastView && lastView.g && L.wsDirty(ui.ws, lastView.g.table, lastView.g.hand)); }
+  function wsGuard() {   // 念のため：作業領域のタイルが 場＋手札 と一致しなければ番の最初に戻す
+    var a = L.wsAudit(ui.ws, lastView.g.table, lastView.g.hand);
+    if (a.ok) return true;
+    try { console.warn('ws audit failed', a); } catch (e) {}
+    ui.ws = L.wsNew(lastView.g.table, lastView.g.hand); ui.sel = []; toast('並びにずれが見つかったので、この番の最初に戻しました'); return false;
+  }
   function renderGame(v) {
-    var g = v.g, gk = v.code + ':' + v.gameNo, my = myTurnNow(v);
+    var g = v.g, gk = v.code + ':' + v.gameNo, my = myTurnNow(v), busy = !host && !!pending;
     if (ui.gameKey !== gk) { ui.gameKey = gk; ui.sayId = g.say ? g.say.id : null; ui.n = -1; }
     if (ui.n !== g.n || (my && !ui.ws) || (!my && ui.ws)) {
       ui.n = g.n; ui.sel = [];
-      ui.ws = my ? { table: g.table.map(function (m) { return m.slice(); }), hand: g.hand.slice() } : null;
+      ui.ws = my ? L.wsNew(g.table, g.hand) : null;
     }
     var table = ui.ws ? ui.ws.table : g.table, hand = ui.ws ? ui.ws.hand : g.hand, t0 = onTable0(v), cur = g.players[g.turn];
     document.body.classList.add('in-game');
@@ -507,7 +514,7 @@
     if (!my && g.last && g.last.placed) g.last.placed.forEach(function (id) { lastSet[id] = 1; });
     var h = table.map(function (m, k) {
       var M = L.meld(m), ord = M.ok ? M.order : m, chg = my && m.some(function (id) { return !t0[id]; });
-      return '<div class="meld' + (M.ok ? '' : ' bad') + (chg ? ' chg' : '') + '" data-k="' + k + '">' + (my ? '<span class="vl">' + (M.ok ? M.val + '点' : '×') + '</span>' : '') +
+      return '<div class="meld' + (M.ok ? '' : ' bad') + (chg ? ' chg' : '') + '" data-k="' + k + '">' + (my ? '<span class="vl">' + (M.ok ? M.val + '点' : '× ' + L.meldWhy(m)) + '</span>' : '') +
         ord.map(function (id) { return tk(id, (ui.sel.indexOf(id) >= 0 ? 'sel' : '') + (my && !t0[id] ? ' mine' : '') + (lastSet[id] ? ' lastp' : '')); }).join('') +
         (selOn ? '<span class="drop" data-drop="' + k + '">＋</span>' : '') + '</div>';
     }).join('');
@@ -522,16 +529,18 @@
     else if (my) {
       var chk = changed() ? L.checkCommit(pseudoG(v), g.me, table) : { err: 'none' };
       if (!opened) { var pts = 0; table.forEach(function (m) { if (m.every(function (id) { return !t0[id]; })) { var M = L.meld(m); if (M.ok) pts += M.val; } }); msg = '初回：手札だけで <b>' + pts + ' / 30点</b>　'; }
-      if (!changed()) msg += ui.sel.length ? '「＋」で置き場所をタップ' : 'タイルを選んで並べる／出せなければ 1枚引く';
-      else if (chk.err) msg += '<span class="warn">' + ({ invalid: '赤い枠の組を直してね', open: 'あと ' + (30 - (chk.pts || 0)) + '点 足りません', touch: '初回は場のタイルに触れられません', none: '' }[chk.err] || '並べ方を確認してね') + '</span>';
+      if (busy) msg += '送信中…';
+      else if (!changed()) msg += ui.sel.length ? '「＋」で置き場所をタップ' : 'タイルを選んで並べる／出せなければ 1枚引く';
+      else if (chk.err) msg += '<span class="warn">決定できません：' + whyText(chk, table, v) + '</span>';
       else msg += '✔ 決定できます（' + (g.hand.length - hand.length) + '枚）';
-      $('commitBtn').disabled = !changed() || !!chk.err;
+      $('commitBtn').disabled = busy || !changed() || !!chk.err;
     } else if (g.wait > 0) msg = 'まもなく開始…';
     else msg = esc(cur.name) + ' が考えています…' + (host && g.curOff ? ' <button class="ib" style="background:var(--felt)" id="subBtn">' + BEAR + ' 代打ち</button>' : '');
     st.innerHTML = msg;
     $('ctrl').style.visibility = my ? 'visible' : 'hidden';
-    $('resetBtn').disabled = !changed() && !ui.sel.length;
-    $('backBtn').disabled = !ui.sel.some(function (id) { return !t0[id] && hand.indexOf(id) < 0; });
+    $('resetBtn').disabled = busy || (!changed() && !ui.sel.length);
+    $('backBtn').disabled = busy || !ui.sel.some(function (id) { return !t0[id] && hand.indexOf(id) < 0; });
+    $('drawBtn').disabled = busy;
     $('drawBtn').textContent = g.pool ? '🀫 1枚引く' : 'パス';
     // 手札
     $('handInfo').textContent = g.me >= 0 ? 'あなたの手札 ' + hand.length + '枚（' + L.handPts(hand) + '点）' : '観戦中';
@@ -541,19 +550,27 @@
     if (g.say && g.say.id !== ui.sayId) { ui.sayId = g.say.id; var b = document.createElement('div'); b.className = 'bubble'; b.textContent = g.players[g.say.p].name + '「' + g.say.text + '」'; document.body.appendChild(b); setTimeout(function () { b.remove(); }, 3000); }
   }
   function rerender() { if (lastView && lastView.phase === 'game') renderGame(lastView); }
-  function removeSel(ws, ids) {
-    ws.hand = ws.hand.filter(function (id) { return ids.indexOf(id) < 0; });
-    ws.table = ws.table.map(function (m) { return m.filter(function (id) { return ids.indexOf(id) < 0; }); }).filter(function (m) { return m.length; });
+  function whyText(chk, table, v) {
+    if (chk.err === 'invalid') {
+      var bad = []; table.forEach(function (m, k) { if (!L.meld(m).ok) bad.push(k); });
+      var k = bad[0], first = bad.length ? (k + 1) + '番目の組（' + L.meldWhy(table[k]) + '）' : '赤い枠の組';
+      return first + (bad.length > 1 ? ' ほか' + (bad.length - 1) + '組' : '') + 'を直してね';
+    }
+    if (chk.err === 'open') return '初回は手札だけで30点以上（あと ' + (30 - (chk.pts || 0)) + '点）';
+    if (chk.err === 'touch') return '初回は場の組に触れず、手札だけで新しい組を作ってね';
+    if (chk.err === 'none') return '手札から1枚以上出してね（場の並べ替えだけでは決定できません）';
+    if (chk.err === 'kept') return '場にあったタイルは場に残してね';
+    var a = L.wsAudit(ui.ws, v.g.table, v.g.hand);
+    if (a.dup.length) return 'タイルが重なっています（リセットしてね）';
+    return '並びが番の最初とずれています（リセットしてね）';
   }
   $('game').addEventListener('click', function (e) {
     var v = lastView; if (!v || v.phase !== 'game' || !ui.ws || !myTurnNow(v)) return;
     var drop = e.target.closest('[data-drop]');
     if (drop && ui.sel.length) {
-      var ids = ui.sel.slice(), dk = drop.dataset.drop, target = dk === 'new' ? null : ui.ws.table[+dk];
-      removeSel(ui.ws, ids);
-      if (target) { var t = target.filter(function (id) { return ids.indexOf(id) < 0; }).concat(ids), at = ui.ws.table.indexOf(target); if (at >= 0) ui.ws.table[at] = t; else ui.ws.table.push(t); }
-      else ui.ws.table.push(ids);
-      ui.sel = []; rerender(); return;
+      var dk = drop.dataset.drop;
+      ui.ws = L.wsMove(ui.ws, ui.sel, dk === 'new' ? -1 : +dk);   // 組の位置は番号で指定（以前は配列の参照で探していて、組が二重になる不具合があった）
+      ui.sel = []; wsGuard(); rerender(); return;
     }
     var tile = e.target.closest('.tk[data-id]'); if (!tile) return;
     var id = +tile.dataset.id, t0 = onTable0(v), opened = v.g.players[v.g.me].opened;
@@ -561,13 +578,14 @@
     var i = ui.sel.indexOf(id); if (i >= 0) ui.sel.splice(i, 1); else ui.sel.push(id);
     rerender();
   });
-  $('resetBtn').onclick = function () { if (!lastView || !ui.ws) return; ui.ws = { table: lastView.g.table.map(function (m) { return m.slice(); }), hand: lastView.g.hand.slice() }; ui.sel = []; rerender(); };
+  $('resetBtn').onclick = function () { if (!lastView || !ui.ws) return; ui.ws = L.wsNew(lastView.g.table, lastView.g.hand); ui.sel = []; rerender(); };
   $('backBtn').onclick = function () {
-    if (!ui.ws) return; var t0 = onTable0(lastView), back = ui.sel.filter(function (id) { return !t0[id] && ui.ws.hand.indexOf(id) < 0; });
+    if (!ui.ws) return; var t0 = onTable0(lastView);
     if (ui.sel.some(function (id) { return t0[id]; })) toast('場にあったタイルは手札に戻せません');
-    removeSel(ui.ws, back); ui.ws.hand = ui.ws.hand.concat(back); ui.sel = ui.sel.filter(function (id) { return back.indexOf(id) < 0; }); rerender();
+    ui.ws = L.wsBack(ui.ws, ui.sel, lastView.g.table);
+    ui.sel = ui.sel.filter(function (id) { return t0[id]; }); wsGuard(); rerender();
   };
-  $('commitBtn').onclick = function () { if (!ui.ws) return; act({ t: 'commit', table: ui.ws.table.map(function (m) { var M = L.meld(m); return M.ok ? M.order : m; }) }); };
+  $('commitBtn').onclick = function () { if (!ui.ws || !wsGuard()) { rerender(); return; } act({ t: 'commit', table: ui.ws.table.map(function (m) { var M = L.meld(m); return M.ok ? M.order : m; }) }); };
   $('drawBtn').onclick = function () {
     if (!ui.ws) return;
     var go = function () { act({ t: 'draw' }); };

@@ -130,12 +130,12 @@ body.is-host .guest-only{display:none!important}
 #tableWrap{flex:1;min-height:0;overflow:auto;margin:0 8px;border-radius:14px;background:radial-gradient(ellipse at 50% 30%,#3a7d58,var(--felt) 70%);box-shadow:inset 0 0 0 3px #6b4f2a,inset 0 0 24px rgba(0,0,0,.35);touch-action:pan-y;overscroll-behavior:contain}
 #table{display:flex;flex-wrap:wrap;align-content:flex-start;gap:8px 8px;padding:10px}
 .meld{display:inline-flex;align-items:center;gap:2px;padding:4px;border-radius:9px;background:rgba(255,255,255,.12);border:2px solid transparent;position:relative}
-.meld.bad{border-color:#ff6b5a;background:rgba(255,107,90,.22)}
 .meld.chg{border-color:rgba(242,183,5,.7)}
+.meld.bad,.meld.bad.chg{border-color:#ff6b5a;background:rgba(255,107,90,.22)}
 .meld .drop,.newMeld{min-width:30px;height:41px;border-radius:7px;border:2px dashed rgba(255,255,255,.75);color:#fff;font-weight:900;font-size:18px;display:inline-grid;place-items:center;cursor:pointer;background:rgba(255,255,255,.08)}
 .newMeld{padding:0 10px;font-size:13px}
 .meld .vl{position:absolute;right:4px;top:-9px;font-size:9.5px;font-weight:900;background:#fff;border-radius:6px;padding:0 4px;color:var(--feltd)}
-.meld.bad .vl{color:var(--ng)}
+.meld.bad .vl{color:#fff;background:var(--ng,#d64535);left:2px;right:auto;white-space:nowrap;z-index:2;font-size:10px}
 .emptyT{color:#e6f3ea;font-weight:800;font-size:13px;opacity:.85;padding:18px;text-align:center;width:100%}
 .status{font-size:13px;font-weight:900;text-align:center;padding:6px 10px 2px;min-height:26px;line-height:1.35}
 .status.mine{color:var(--feltd)}.status .warn{color:var(--ng)}

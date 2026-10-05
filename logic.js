@@ -255,7 +255,64 @@
     if (left.length === hand.length) return null;
     var chk = checkCommit(G, p, newT); return chk.err ? null : { table: newT };
   }
+
+  // ---- 手番中の並べ替え（画面側の作業領域）。すべて新しいオブジェクトを返す純粋関数 ----
+  function wsNew(table, hand) { return { table: table.map(function (m) { return m.slice(); }), hand: hand.slice() }; }
+  function wsIds(ws) { var a = ws.hand.slice(); ws.table.forEach(function (m) { a = a.concat(m); }); return a; }
+  // ids を ws から取り出し、dest 番目の組の末尾（dest<0 または範囲外なら新しい組）へ置く
+  function wsMove(ws, ids, dest) {
+    var have = {}, pick = {}, list = [];
+    wsIds(ws).forEach(function (id) { have[id] = 1; });
+    (ids || []).forEach(function (id) { if (have[id] && !pick[id]) { pick[id] = 1; list.push(id); } });
+    if (!list.length) return ws;
+    var keep = function (id) { return !pick[id]; }, table = [], toNew = !(dest >= 0 && dest < ws.table.length);
+    ws.table.forEach(function (m, k) { var r = m.filter(keep); if (k === dest) r = r.concat(list); if (r.length) table.push(r); });
+    if (toNew) table.push(list);
+    return { table: table, hand: ws.hand.filter(keep) };
+  }
+  // この番に手札から出したタイル（base の場に無かったもの）だけを手札へ戻す
+  function wsBack(ws, ids, baseTable) {
+    var was = {}, back = {}, list = [];
+    baseTable.forEach(function (m) { m.forEach(function (id) { was[id] = 1; }); });
+    ws.table.forEach(function (m) { m.forEach(function (id) { if (!was[id] && (ids || []).indexOf(id) >= 0 && !back[id]) { back[id] = 1; list.push(id); } }); });
+    if (!list.length) return ws;
+    return { table: ws.table.map(function (m) { return m.filter(function (id) { return !back[id]; }); }).filter(function (m) { return m.length; }), hand: ws.hand.concat(list) };
+  }
+  // 作業領域のタイルが「番の最初の 場＋手札」とぴったり同じか（重複・増殖・消失の検出）
+  function wsAudit(ws, baseTable, baseHand) {
+    var cnt = {}, dup = [], extra = [], missing = [], want = {};
+    wsIds({ table: baseTable, hand: baseHand }).forEach(function (id) { want[id] = 1; });
+    wsIds(ws).forEach(function (id) { cnt[id] = (cnt[id] || 0) + 1; if (cnt[id] === 2) dup.push(id); if (!want[id] && extra.indexOf(id) < 0) extra.push(id); });
+    for (var w in want) if (!cnt[w]) missing.push(+w);
+    var bad = ws.table.some(function (m) { return !Array.isArray(m) || !m.length; });
+    return { ok: !dup.length && !extra.length && !missing.length && !bad, dup: dup, extra: extra, missing: missing };
+  }
+  // 番の最初から何か変わったか（手札の枚数、または場の組の構成）
+  function wsDirty(ws, baseTable, baseHand) {
+    if (ws.hand.length !== baseHand.length) return true;
+    var a = ws.table.map(key).sort().join('|'), b = baseTable.map(key).sort().join('|');
+    return a !== b;
+  }
+  // 組として成り立たない理由（短い日本語）
+  function meldWhy(ids) {
+    if (meld(ids).ok) return '';
+    var ns = ids.filter(function (i) { return !isJ(i); });
+    if (ids.length < 3) return '3枚以上必要';
+    if (!ns.length) return '数字タイルが必要';
+    var sameNum = ns.every(function (i) { return num(i) === num(ns[0]); }), sameCol = ns.every(function (i) { return color(i) === color(ns[0]); });
+    if (sameNum && !sameCol) {
+      if (ids.length > 4) return '同じ数字は4枚まで';
+      return '同じ色が重なっている';
+    }
+    if (sameCol) {
+      var seen = {}; for (var k = 0; k < ns.length; k++) { if (seen[num(ns[k])]) return '同じ数字が重なっている'; seen[num(ns[k])] = 1; }
+      if (ids.length > 13) return '13枚まで';
+      return '数字がつながっていない';
+    }
+    return '数字か色をそろえて';
+  }
   function rngFrom(seed) { var s = seed >>> 0 || 1; return function () { s ^= s << 13; s >>>= 0; s ^= s >>> 17; s ^= s << 5; s >>>= 0; return s / 4294967296; }; }
-  var api = { NT: NT, JK: JK, OPEN: OPEN, color: color, num: num, isJ: isJ, meld: meld, handPts: handPts, newGame: newGame, checkCommit: checkCommit, commit: commit, draw: draw, aiTurn: aiTurn, candidates: candidates, LEVELS: ['weak', 'normal', 'strong'], rngFrom: rngFrom };
+  var api = { NT: NT, JK: JK, OPEN: OPEN, color: color, num: num, isJ: isJ, meld: meld, handPts: handPts, newGame: newGame, checkCommit: checkCommit, commit: commit, draw: draw, aiTurn: aiTurn, candidates: candidates, LEVELS: ['weak', 'normal', 'strong'], rngFrom: rngFrom, key: key,
+    wsNew: wsNew, wsIds: wsIds, wsMove: wsMove, wsBack: wsBack, wsAudit: wsAudit, wsDirty: wsDirty, meldWhy: meldWhy };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.RK = api;
 })(this);
