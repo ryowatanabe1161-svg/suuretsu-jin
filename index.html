@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#1f4d34">
+<title>数列陣</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect x='6' y='10' width='40' height='56' rx='7' fill='%23fffaf0' stroke='%23d6c39a' stroke-width='3'/><text x='26' y='50' font-size='34' font-weight='900' text-anchor='middle' fill='%23d0342c'>7</text><rect x='54' y='34' width='40' height='56' rx='7' fill='%23fffaf0' stroke='%23d6c39a' stroke-width='3'/><text x='74' y='74' font-size='34' font-weight='900' text-anchor='middle' fill='%231f5fbf'>8</text></svg>">
+<style>
+:root{--bg:#f3ead9;--ink:#2a2522;--pink:#1f6f78;--pinkd:#134a50;--mint:#e8b04a;--sky:#8ecae6;--sun:#f1c75b;--card:#fffdf7;--line:#e2d6bd;--ok:#2f9a5a;--ng:#c8452f;--c0:#2f6fd6;--c1:#f2b705;--c2:#d93a3a;--c3:#2fa35a}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;overflow:hidden;overscroll-behavior:none;background:var(--bg);color:var(--ink);font-family:"Hiragino Maru Gothic ProN","Hiragino Sans","Noto Sans JP","Yu Gothic",system-ui,sans-serif}
+body{position:fixed;inset:0;width:100%;-webkit-text-size-adjust:100%;touch-action:manipulation;background-image:linear-gradient(rgba(120,90,50,.06) 1px,transparent 1px),linear-gradient(90deg,rgba(120,90,50,.06) 1px,transparent 1px);background-size:18px 18px}
+button{font:inherit;color:inherit;border:0;cursor:pointer;background:none}
+button:disabled{opacity:.45;cursor:default}
+input{font:inherit}
+/* 画面ごとに中でスクロール（ページ全体は動かさない＝引っぱってもバウンス・ホームに戻らない） */
+.screen{display:none;position:absolute;inset:0;flex-direction:column;overflow-y:auto;overflow-x:hidden;overscroll-behavior:none;-webkit-overflow-scrolling:touch}
+.screen.active{display:flex}
+.screen>.col{flex:1 0 auto}
+.col{width:100%;max-width:560px;margin:0 auto;padding:14px 14px calc(18px + env(safe-area-inset-bottom));flex:1;display:flex;flex-direction:column;gap:12px}
+.card{background:var(--card);border-radius:20px;padding:14px;box-shadow:0 3px 0 var(--line),0 6px 18px rgba(120,60,40,.08)}
+.btn{display:block;width:100%;padding:13px 14px;border-radius:16px;font-weight:900;font-size:16px;background:#fff;box-shadow:0 3px 0 var(--line);border:2px solid var(--line)}
+.btn.main{background:var(--pink);color:#fff;border-color:var(--pinkd);box-shadow:0 4px 0 var(--pinkd)}
+.btn.sub{background:var(--mint);color:#2a2522;border-color:#b88a2a;box-shadow:0 4px 0 #b88a2a}
+.btn:active:not(:disabled){transform:translateY(2px);box-shadow:none}
+.row{display:flex;gap:8px}.row>*{flex:1}
+.lab{font-size:13px;font-weight:800;opacity:.75;margin:2px 2px 6px}
+.in{width:100%;padding:12px 14px;border-radius:14px;border:2px solid var(--line);font-size:17px;background:#fffdfb;outline:none}
+.in:focus{border-color:var(--pink)}
+.hint{font-size:12.5px;opacity:.7;margin:4px 2px 0;line-height:1.5}
+/* タイトル */
+.logo{text-align:center;padding:18px 0 4px}
+.logo .tag{display:inline-block;background:#fff;border:3px solid var(--pink);border-radius:18px;padding:10px 18px 12px;box-shadow:0 5px 0 var(--pinkd);transform:rotate(-2deg);position:relative}
+.logo .tag:before{content:"";position:absolute;top:-14px;left:50%;width:14px;height:14px;margin-left:-7px;border-radius:50%;border:3px solid var(--pink);background:var(--bg)}
+.logo .tag{margin:0;max-width:100%}
+.logo .t1{font-size:34px;font-weight:900;color:var(--pinkd);letter-spacing:1px}
+.logo .t2{font-size:21px;font-weight:900;line-height:1.45;margin-top:2px}
+@media (max-width:360px){.logo .t1{font-size:29px}.logo .t2{font-size:18px}}
+.lobbyTitle{text-align:center;font-size:13.5px;font-weight:900;color:var(--pinkd);line-height:1.5;margin-top:-2px}
+.logo .t3{font-size:13px;font-weight:800;opacity:.7;margin-top:10px}
+.logo .bear{font-size:44px;display:block;margin-top:6px;animation:bob 2.4s ease-in-out infinite}
+@keyframes bob{50%{transform:translateY(-6px) rotate(4deg)}}
+/* ロビー */
+.codeBig{font-size:44px;font-weight:900;letter-spacing:8px;text-align:center;color:var(--pinkd)}
+#qr{width:150px;margin:0 auto}#qr svg{width:100%;height:auto;display:block}
+.url{font-size:12px;word-break:break-all;opacity:.7;text-align:center;margin:6px 0}
+.seat{display:flex;align-items:center;gap:8px;padding:8px 6px;border-bottom:1px dashed var(--line)}
+.seat:last-child{border-bottom:0}.seat.offline{opacity:.5}
+.av{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;color:#fff;font-weight:900;flex:none;font-size:15px}
+.seat .nm{font-weight:900;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tagx{font-size:11px;font-weight:800;padding:2px 7px;border-radius:99px;background:#f3ebe6}
+.tagx.host{background:#ffe08a}.tagx.cpu{background:#d6f5ea}.tagx.you{background:#cdebd7}.tagx.off{background:#eee}
+.xbtn{width:30px;height:30px;border-radius:50%;background:#f6eae4;font-weight:900}
+.seg{display:flex;gap:6px;flex-wrap:wrap}
+.seg button{flex:1;min-width:64px;padding:9px 4px;border-radius:12px;background:#fbf3ee;border:2px solid var(--line);font-weight:900;font-size:14px}
+.seg button small{display:block;font-size:10.5px;font-weight:700;opacity:.65}
+.seg button.on{background:var(--sun);border-color:#e6b84a}
+.seg.ro button:disabled{opacity:1}.seg.ro button:not(.on){opacity:.45}
+/* ゲーム */
+.top{display:flex;align-items:center;gap:6px;padding:8px 10px;padding-top:calc(8px + env(safe-area-inset-top));background:var(--pink);color:#fff;position:sticky;top:0;z-index:5}
+.top .ph{font-weight:900;font-size:15px;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ib{padding:6px 10px;border-radius:99px;background:rgba(255,255,255,.25);font-weight:900;font-size:13px;color:#fff;white-space:nowrap}
+#players{display:flex;gap:6px;overflow-x:auto;padding:8px 10px 2px;scrollbar-width:none}
+.pc{flex:none;display:flex;align-items:center;gap:5px;background:#fff;border-radius:99px;padding:3px 10px 3px 3px;box-shadow:0 2px 0 var(--line);font-size:13px;font-weight:900;border:2px solid transparent}
+.pc .av{width:24px;height:24px;font-size:12px}
+.pc.cur{border-color:var(--pink)}.pc.off{opacity:.45}
+.pc .sc{color:var(--pinkd)}.pc .mk{font-size:12px}
+.stage{flex:1;display:flex;flex-direction:column;gap:12px;padding:10px 14px calc(16px + env(safe-area-inset-bottom));max-width:560px;width:100%;margin:0 auto}
+.big{font-size:22px;font-weight:900;text-align:center}
+.mid{font-size:15px;font-weight:800;text-align:center;opacity:.8;line-height:1.6}
+.wait{text-align:center;font-size:40px;animation:bob 1.6s ease-in-out infinite}
+.lines{display:flex;flex-direction:column;gap:6px}
+.line{align-self:flex-start;background:#eafaf4;border-radius:14px;padding:6px 12px;font-size:13.5px;font-weight:800;animation:pop .3s}
+/* 結果 */
+.rk{display:flex;align-items:center;gap:10px;padding:10px;border-radius:14px;background:#fffaf6;margin-bottom:6px;font-weight:900}
+.rk.first{background:#fff1c1;box-shadow:0 3px 0 #e6c45a}
+.rk .md{font-size:24px;width:30px;text-align:center}.rk .nm{flex:1}.rk .sc{font-size:22px;color:var(--pinkd)}.rk small{font-size:11px;opacity:.65;display:block}
+/* オーバーレイ */
+.ov{touch-action:none;overscroll-behavior:none;position:fixed;inset:0;z-index:50;background:rgba(30,26,24,.5);display:none;align-items:center;justify-content:center;padding:18px}
+.ov.active{display:flex}
+.ov .card{width:100%;max-width:400px;max-height:88vh;max-height:88dvh;overflow:auto;overscroll-behavior:none;touch-action:pan-y}
+.ov h3{margin:0 0 8px;text-align:center}
+.spin{width:40px;height:40px;border-radius:50%;border:5px solid #cdebd7;border-top-color:var(--pink);margin:10px auto;animation:sp 1s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+#toast{position:fixed;left:50%;bottom:16%;transform:translateX(-50%);background:rgba(30,26,24,.92);color:#fff;padding:10px 16px;border-radius:14px;font-weight:800;font-size:14px;z-index:90;display:none;max-width:88%;text-align:center}
+#toast.show{display:block}
+#banner{display:none;position:fixed;top:0;left:0;right:0;z-index:60;background:#ffe08a;padding:6px 10px;font-size:13px;font-weight:800;text-align:center}
+#banner.show{display:block}
+#lobbyReqBar{display:none;gap:6px;align-items:center;background:#fff1c1;padding:8px 10px;font-size:13px;font-weight:800;flex-wrap:wrap}
+#lobbyReqBar.show{display:flex}#lobbyReqBar span{flex:1 1 100%}
+#lobbyReqBar button{padding:6px 10px;border-radius:10px;background:var(--pink);color:#fff;font-weight:900}#lobbyReqBar button.ghost{background:#fff;color:var(--ink)}
+.rules li{margin-bottom:6px;font-size:14px;line-height:1.55}
+.menu .btn{margin-bottom:8px}
+body:not(.is-host) .host-only{display:none!important}
+body.is-host .guest-only{display:none!important}
+.confetti{position:fixed;top:-12px;width:9px;height:14px;z-index:80;animation:fall linear forwards;border-radius:2px}
+@keyframes fall{to{transform:translateY(105vh) rotate(720deg)}}
+
+/* 数列陣 */
+:root{--felt:#2f6b4a;--feltd:#1f4d34}
+.logo .t1{font-family:"Hiragino Mincho ProN","Yu Mincho","Noto Serif JP",serif;font-size:50px;letter-spacing:8px;color:var(--ink)}
+.logo .t2{font-size:14px;font-weight:900;color:#5c4a2e;margin-top:4px}
+.logo .tag{border-color:var(--ink);box-shadow:0 5px 0 var(--ink);transform:none}
+.logo .tag:before{display:none}
+.minis{display:flex;justify-content:center;gap:6px;margin-top:14px}
+.crow{display:flex;align-items:center;gap:8px;padding:8px 4px;border-bottom:1px dashed var(--line)}
+.crow:last-child{border:0}.crow .nm{flex:1;font-weight:900;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.crow select{font:inherit;font-weight:800;font-size:13px;padding:5px 4px;border-radius:10px;border:2px solid var(--line);background:#fff}
+.crow .lv{font-size:12px;font-weight:900;padding:3px 8px;border-radius:99px;background:#f2ead8}
+/* タイル */
+.tk{--tw:30px;width:var(--tw);height:calc(var(--tw)*1.38);flex:none;border-radius:calc(var(--tw)*.16);background:linear-gradient(#fffef9,#f0e6cf);box-shadow:inset 0 -3px 0 #d6c39a,0 1px 2px rgba(0,0,0,.35);display:inline-flex;flex-direction:column;align-items:center;justify-content:center;
+  font:900 calc(var(--tw)*.6)/1 "Hiragino Sans","Noto Sans JP",system-ui,sans-serif;position:relative;cursor:pointer;user-select:none;-webkit-user-select:none;transition:transform .1s}
+.tk small{font-size:calc(var(--tw)*.3);line-height:1;margin-top:1px}
+.tk.c0{color:#26262e}.tk.c1{color:#d0342c}.tk.c2{color:#1f5fbf}.tk.c3{color:#d88c00}
+.tk.jk{background:linear-gradient(#fff4dc,#f3d9a8);font-size:calc(var(--tw)*.62)}
+.tk.jk small{color:#8a5a2b;font-weight:900}
+.tk.sel{transform:translateY(-5px);box-shadow:0 0 0 3px #fff,0 0 0 5px #f2b705,0 5px 10px rgba(0,0,0,.35)}
+.tk.mine{box-shadow:inset 0 -3px 0 #d6c39a,0 0 0 2px #f2b705}
+.tk.lastp{box-shadow:inset 0 -3px 0 #d6c39a,0 0 0 2px #7fd1ff}
+/* ゲーム */
+#game{overflow:hidden}
+#game .top{background:var(--feltd)}
+.gwrap{flex:1;display:flex;flex-direction:column;min-height:0;max-width:1100px;width:100%;margin:0 auto}
+#players{display:grid;grid-template-columns:repeat(var(--np,4),minmax(0,1fr));gap:4px;padding:6px 8px 4px;overflow:visible}
+.pc{padding:4px 6px;border-radius:12px;display:flex;flex-direction:column;align-items:flex-start;min-width:0;font-size:11.5px}
+.pc .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
+.pc .ct{font-size:13px}.pc .sub{font-size:10px;opacity:.7;font-weight:800;white-space:nowrap}
+.pc.cur{border-color:var(--felt);background:#e2f2e8}
+#tableWrap{flex:1;min-height:0;overflow:auto;margin:0 8px;border-radius:14px;background:radial-gradient(ellipse at 50% 30%,#3a7d58,var(--felt) 70%);box-shadow:inset 0 0 0 3px #6b4f2a,inset 0 0 24px rgba(0,0,0,.35);touch-action:pan-y;overscroll-behavior:contain}
+#table{display:flex;flex-wrap:wrap;align-content:flex-start;gap:8px 8px;padding:10px}
+.meld{display:inline-flex;align-items:center;gap:2px;padding:4px;border-radius:9px;background:rgba(255,255,255,.12);border:2px solid transparent;position:relative}
+.meld.bad{border-color:#ff6b5a;background:rgba(255,107,90,.22)}
+.meld.chg{border-color:rgba(242,183,5,.7)}
+.meld .drop,.newMeld{min-width:30px;height:41px;border-radius:7px;border:2px dashed rgba(255,255,255,.75);color:#fff;font-weight:900;font-size:18px;display:inline-grid;place-items:center;cursor:pointer;background:rgba(255,255,255,.08)}
+.newMeld{padding:0 10px;font-size:13px}
+.meld .vl{position:absolute;right:4px;top:-9px;font-size:9.5px;font-weight:900;background:#fff;border-radius:6px;padding:0 4px;color:var(--feltd)}
+.meld.bad .vl{color:var(--ng)}
+.emptyT{color:#e6f3ea;font-weight:800;font-size:13px;opacity:.85;padding:18px;text-align:center;width:100%}
+.status{font-size:13px;font-weight:900;text-align:center;padding:6px 10px 2px;min-height:26px;line-height:1.35}
+.status.mine{color:var(--feltd)}.status .warn{color:var(--ng)}
+.ctrl{display:flex;gap:6px;padding:4px 8px}
+.ctrl button{flex:1;padding:9px 2px;border-radius:12px;font-weight:900;font-size:13.5px;background:#fff;border:2px solid var(--line);box-shadow:0 3px 0 var(--line);white-space:nowrap}
+.ctrl button.main{flex:1.3;background:var(--felt);color:#fff;border-color:var(--feltd);box-shadow:0 3px 0 var(--feltd)}
+.ctrl button.draw{background:var(--mint);border-color:#b88a2a;box-shadow:0 3px 0 #b88a2a}
+.ctrl button:active:not(:disabled){transform:translateY(2px);box-shadow:none}
+.handHead{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:900;padding:2px 12px 0}
+.handHead .r{margin-left:auto;display:flex;gap:4px}
+.handHead button{padding:3px 8px;border-radius:8px;background:#fff;border:2px solid var(--line);font-weight:900;font-size:11.5px}
+.handHead button.on{background:var(--sun);border-color:#e6b84a}
+#hand{display:flex;flex-wrap:wrap;gap:4px 3px;padding:6px 10px calc(10px + env(safe-area-inset-bottom));max-height:34vh;max-height:34dvh;overflow-y:auto;align-content:flex-start;min-height:56px;touch-action:pan-y}
+body.in-game .hiroba-fab{display:none!important}
+.bubble{position:fixed;left:50%;top:100px;transform:translateX(-50%);background:#fff;border:2px solid #8a5a2b;border-radius:16px;padding:6px 12px;font-size:13px;font-weight:900;z-index:20;box-shadow:0 4px 10px rgba(0,0,0,.18);animation:bub 3s ease forwards;pointer-events:none;white-space:nowrap;max-width:94%;overflow:hidden;text-overflow:ellipsis}
+@keyframes bub{0%{opacity:0;transform:translate(-50%,-6px)}8%{opacity:1;transform:translate(-50%,0)}80%{opacity:1}100%{opacity:0}}
+#lines{font-size:11.5px;font-weight:800;opacity:.75;text-align:center;padding:0 10px;min-height:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* 結果 */
+.rk small{line-height:1.5}
+.rem{display:flex;flex-wrap:wrap;gap:2px;margin-top:4px}.rem .tk{--tw:20px;cursor:default}
+@media (min-width:900px){
+  .tk{--tw:40px}.meld .drop,.newMeld{height:55px;min-width:40px}
+  .gwrap{padding:8px 12px}
+  #hand{max-height:none}
+}
+@media (max-width:360px){.tk{--tw:26px}.meld .drop,.newMeld{height:36px}}
+</style>
+</head>
+<body>
+<div id="banner"></div>
+<!-- タイトル -->
+<section class="screen active" id="title"><div class="col">
+  <div class="logo"><h1 class="tag" aria-label="数列陣"><div class="t1">数列陣</div><div class="t2">〜ふーさんと数字タイルの陣〜</div></h1>
+    <div class="minis"><i class="tk c0">1<small>●</small></i><i class="tk c1">2<small>◆</small></i><i class="tk c2">3<small>▲</small></i><i class="tk c3">4<small>★</small></i><i class="tk jk">🐻<small>J</small></i></div>
+    <div class="t3">数字タイルを「同じ数字」や「続き番号」に並べて、手札を先になくそう。2〜4人（空いた席はふーさん🐻）</div></div>
+  <div class="card">
+    <div class="lab">ニックネーム</div>
+    <input class="in" id="nameIn" maxlength="8" placeholder="例：さとう" autocomplete="nickname">
+  </div>
+  <div class="card" id="inviteJoinBox" style="display:none"><div class="big" style="font-size:16px">部屋 <b id="invCode"></b> に招待されています</div><button class="btn main" id="joinInvitedBtn" style="margin-top:10px">この部屋に入る</button></div>
+  <button class="btn main" id="createBtn">🀄 部屋を作る（ホスト）</button>
+  <div class="card"><div class="lab">部屋コードで参加</div><div class="row"><input class="in" id="codeIn" maxlength="4" placeholder="ABCD" autocapitalize="characters" style="text-transform:uppercase;letter-spacing:4px;font-weight:900"><button class="btn sub" id="joinBtn" style="flex:.6">参加</button></div></div>
+  <button class="btn" id="resumeBtn" style="display:none"></button>
+  <button class="btn" id="rejoinBtn" style="display:none"></button>
+  <button class="btn" id="rulesBtn1">📖 あそびかた</button>
+  <p class="hint" style="text-align:center">2〜4人・約20〜30分。スマホでもPCでも。</p>
+</div></section>
+<!-- ロビー -->
+<section class="screen" id="lobby"><div class="col">
+  <div class="lobbyTitle" style="color:var(--ink)">🀄 数列陣</div>
+  <div class="card" style="text-align:center"><div class="lab">部屋コード</div><div class="codeBig" id="codeBig"></div><div id="qr"></div><div class="url" id="inviteUrl"></div><div class="row"><button class="btn" id="copyBtn">🔗 コピー</button><button class="btn" id="shareBtn">📤 共有</button></div></div>
+  <div class="card"><div class="row" style="align-items:center"><div class="lab" style="margin:0">参加者</div><div class="lab" id="seatCount" style="text-align:right;margin:0"></div></div><div id="seatList"></div><p class="hint" id="seatHint"></p></div>
+  <div class="card"><div class="lab">人数（空いた席は ふーさん🐻）</div><div class="seg" id="seatSeg"></div>
+    <div id="cpuList" style="margin-top:8px"></div>
+    <div class="host-only" id="lvAllBox"><div class="lab" style="margin-top:10px">ふーさんの強さを まとめて変える</div><div class="seg" id="lvAllSeg"></div></div>
+    <p class="hint guest-only">設定はホストが決めます。</p></div>
+  <button class="btn main host-only" id="startBtn">▶ ゲームスタート</button>
+  <p class="mid guest-only" id="guestWait">ホストがスタートするのを待っています…</p>
+  <div class="row"><button class="btn" id="rulesBtn2">📖 あそびかた</button><button class="btn" id="leaveBtn1">🚪 部屋を出る</button></div>
+</div></section>
+<!-- ゲーム -->
+<section class="screen" id="game">
+  <div class="top"><span class="ph" id="phLabel"></span><span class="ib" id="poolChip"></span><button class="ib" id="menuBtn" aria-label="メニュー">⋯</button></div>
+  <div id="lobbyReqBar"></div>
+  <div class="gwrap">
+    <div id="players"></div>
+    <div id="tableWrap"><div id="table"></div></div>
+    <div id="lines"></div>
+    <div class="status" id="status"></div>
+    <div class="ctrl" id="ctrl"><button id="resetBtn">↺ リセット</button><button id="backBtn">↩ 手札へ</button><button class="main" id="commitBtn">✔ 決定</button><button class="draw" id="drawBtn">🀫 1枚引く</button></div>
+    <div class="handHead"><span id="handInfo"></span><span class="r"><button id="sortC" class="on">色順</button><button id="sortN">数字順</button></span></div>
+    <div id="hand"></div>
+  </div>
+</section>
+<!-- 結果 -->
+<section class="screen" id="end"><div class="col">
+  <div class="logo" style="padding:6px 0 0"><div style="font-size:26px;font-weight:900" id="endTitle">🀄 けっか</div></div>
+  <div class="card"><div id="rankList"></div><p class="hint" style="text-align:center">負けた人は 残りタイルの合計（🐻は30点）がマイナス。勝った人はその合計をもらえます。</p></div>
+  <button class="btn main host-only" id="againBtn">🔁 もう一度（同じメンバー）</button>
+  <button class="btn host-only" id="toLobbyBtn">🏠 ロビーに戻る</button>
+  <p class="mid guest-only">ホストが次のゲームを始めるのを待っています</p>
+  <button class="btn" id="leaveBtn2">🚪 部屋を出る</button>
+</div></section>
+
+<div class="ov" id="connecting"><div class="card" style="text-align:center"><div class="spin"></div><h3 id="connTitle">接続中…</h3><p class="mid" id="connText"></p><button class="btn" id="connCancel">やめる</button></div></div>
+<div class="ov" id="confirmModal"><div class="card"><h3 id="cfTitle"></h3><p class="mid" id="cfText"></p><div class="row"><button class="btn" id="cfNo">やめる</button><button class="btn main" id="cfYes">OK</button></div></div></div>
+<div class="ov" id="menuModal"><div class="card menu"><h3>メニュー</h3>
+  <button class="btn host-only" id="menuAbort">⏸️ 中断してロビーに戻る</button>
+  <button class="btn guest-only" id="menuReq">🙋 ロビーに戻りたい</button>
+  <button class="btn" id="menuRules">📖 あそびかた</button>
+  <button class="btn" id="menuLeave">🚪 退出する</button>
+  <button class="btn" id="menuHiroba">🏠 ひろばへ</button>
+  <button class="btn main" id="menuClose">とじる</button></div></div>
+<div class="ov" id="rulesModal"><div class="card"><h3>📖 あそびかた</h3><ol class="rules">
+  <li>タイルは<b>墨●・紅◆・藍▲・山吹★</b>の4色×1〜13が2セットと、<b>ふーさんタイル🐻（ジョーカー）</b>2枚の合計106枚。最初に14枚ずつ配り、残りは山にします。</li>
+  <li>組は2種類：<b>同じ数字・ちがう色の3〜4枚</b>（例：赤7・青7・黒7）、または<b>同じ色の続き番号3枚以上</b>（例：青3-4-5）。13の次は1にはつながりません。🐻はどのタイルの代わりにもなります。</li>
+  <li><b>最初に出すとき</b>は、手札だけで作った組の合計が<b>30点以上</b>必要です（🐻は代わりの数字で数える）。最初の回は場のタイルを動かしたり、場の組に付け足したりはできません。</li>
+  <li>一度出したら、次の番からは<b>場の組を自由に組みかえ</b>てOK（くずす・付け足す・入れかえる）。ただし番の終わりには<b>場のすべてが正しい組</b>になっていること。場のタイルを手札に持ち帰ることはできません。</li>
+  <li>手番では「並べて ✔決定」するか、出せない・出したくないときは<b>1枚引く</b>（引いたら番は終わり）。うまくいかなければ「↺ リセット」で番の最初に戻せます。</li>
+  <li><b>手札を全部出したら勝ち！</b> 負けた人は残りタイルの合計（🐻は30点）がマイナス、勝った人はその合計がプラス。山がなくなって全員が出せなくなったら、残りの点がいちばん少ない人の勝ち。</li>
+  <li>操作：タイルをタップして選ぶ（いくつでも）→ 場の組の「＋」か「＋新しい組」をタップで移動。場のタイルも選んで動かせます（最初に出した後）。赤い枠の組は正しくありません。</li>
+  <li>空いた席は <b>ふーさん🐻</b>（弱い／普通／強い）が担当します。</li>
+</ol><button class="btn main" id="rulesClose">とじる</button></div></div>
+<div id="toast"></div>
+<script src="config.js"></script>
+<script src="vendor/peerjs.min.js"></script>
+<script src="vendor/qrcode.js"></script>
+<script src="logic.js"></script>
+<script src="app.js"></script>
+
+<a id="hirobaFab" class="hiroba-fab" href="https://ryowatanabe1161-svg.github.io/fuusan-games/" hidden>🏠 ひろばへ</a>
+<style>
+.hiroba-fab{position:fixed;left:max(10px,env(safe-area-inset-left));bottom:max(10px,env(safe-area-inset-bottom));z-index:45;padding:7px 12px;border-radius:999px;background:rgba(255,253,247,.94);border:2px solid #d9c9a8;font:900 13px "Hiragino Sans","Noto Sans JP",system-ui,sans-serif;color:#2a2522;text-decoration:none;box-shadow:0 2px 8px rgba(0,0,0,.14);-webkit-tap-highlight-color:transparent}
+.hiroba-fab[hidden]{display:none!important}
+@media (display-mode:standalone){.hiroba-fab{display:inline-block}}
+</style>
+<script>
+(function(){
+  var U='https://ryowatanabe1161-svg.github.io/fuusan-games/';
+  function want(){
+    try{ if(new URLSearchParams(location.search).get('from')==='portal') return true; }catch(e){}
+    try{ if(window.matchMedia('(display-mode: standalone)').matches) return true; }catch(e){}
+    if(navigator.standalone) return true;
+    return false;
+  }
+  function go(e){ if(e) e.preventDefault(); location.href=U; }
+  function wire(){
+    var fab=document.getElementById('hirobaFab');
+    if(fab){ fab.hidden=!want(); fab.href=U; fab.addEventListener('click',go); }
+    var b=document.getElementById('menuHiroba');
+    if(b && !b._hiroba){ b._hiroba=1; b.addEventListener('click',function(){ location.href=U; }); }
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',wire); else wire();
+  document.addEventListener('click',function(e){
+    var t=e.target && e.target.closest && e.target.closest('#menuHiroba');
+    if(t){ e.preventDefault(); location.href=U; }
+  },true);
+})();
+</script>
+
+</body>
+</html>
