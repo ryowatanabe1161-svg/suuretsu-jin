@@ -144,6 +144,10 @@ body.is-host .guest-only{display:none!important}
 .ctrl button.main{flex:1.3;background:var(--felt);color:#fff;border-color:var(--feltd);box-shadow:0 3px 0 var(--feltd)}
 .ctrl button.draw{background:var(--mint);border-color:#b88a2a;box-shadow:0 3px 0 #b88a2a}
 .ctrl button:active:not(:disabled){transform:translateY(2px);box-shadow:none}
+.placeBar{display:none;padding:2px 8px 0}
+.placeBar.show{display:block}
+.placeBar button{width:100%;min-height:44px;padding:10px 8px;border-radius:12px;font-weight:900;font-size:15px;background:#fff8e8;color:#1f4d34;border:2px dashed #2f6b4a;box-shadow:0 3px 0 #1f4d34}
+.placeBar button:active{transform:translateY(2px);box-shadow:none}
 .handHead{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:900;padding:2px 12px 0}
 .handHead .r{margin-left:auto;display:flex;gap:4px}
 .handHead button{padding:3px 8px;border-radius:8px;background:#fff;border:2px solid var(--line);font-weight:900;font-size:11.5px}
@@ -205,6 +209,7 @@ body.in-game .hiroba-fab{display:none!important}
     <div id="tableWrap"><div id="table"></div></div>
     <div id="lines"></div>
     <div class="status" id="status"></div>
+    <div class="placeBar" id="placeBar"><button type="button" id="newMeldBtn" data-drop="new">＋ 新しい組</button></div>
     <div class="ctrl" id="ctrl"><button id="resetBtn">↺ リセット</button><button id="backBtn">↩ 手札へ</button><button class="main" id="commitBtn">✔ 決定</button><button class="draw" id="drawBtn">🀫 1枚引く</button></div>
     <div class="handHead"><span id="handInfo"></span><span class="r"><button id="sortC" class="on">色順</button><button id="sortN">数字順</button></span></div>
     <div id="hand"></div>
@@ -233,10 +238,11 @@ body.in-game .hiroba-fab{display:none!important}
   <li>タイルは<b>墨●・紅◆・藍▲・山吹★</b>の4色×1〜13が2セットと、<b>ふーさんタイル🐻（ジョーカー）</b>2枚の合計106枚。最初に14枚ずつ配り、残りは山にします。</li>
   <li>組は2種類：<b>同じ数字・ちがう色の3〜4枚</b>（例：赤7・青7・黒7）、または<b>同じ色の続き番号3枚以上</b>（例：青3-4-5）。13の次は1にはつながりません。🐻はどのタイルの代わりにもなります。</li>
   <li><b>最初に出すとき</b>は、手札だけで作った組の合計が<b>30点以上</b>必要です（🐻は代わりの数字で数える）。最初の回は場のタイルを動かしたり、場の組に付け足したりはできません。</li>
-  <li>一度出したら、次の番からは<b>場の組を自由に組みかえ</b>てOK（くずす・付け足す・入れかえる）。ただし番の終わりには<b>場のすべてが正しい組</b>になっていること。場のタイルを手札に持ち帰ることはできません。</li>
+  <li>一度出したら、次の番からは<b>場の組を自由に組みかえ</b>できます（分ける・付け足す・別の組へ移す・手札と合わせて<b>新しい組</b>を作る）。番の終わりには<b>場のすべてが正しい組</b>で、手札から<b>1枚以上</b>出している必要があります。場の数字タイルを手札に持ち帰ることはできません。</li>
+  <li><b>ふーさんタイル🐻</b>は、その組から外しても残りが正しい組のときだけ手札に戻せます。穴になっているときは、代わりのタイルを先にその組へ入れます（手札からでも、場の別の組からでも構いません。3枚の同じ数字で🐻がいるときは、足りないどちらの色でも代わりになります）。戻した🐻は<b>同じ番のうちに、もう一度組へ</b>出してください。最初の30点を出す前は、場の🐻には触れません。</li>
   <li>手番では「並べて ✔決定」するか、出せない・出したくないときは<b>1枚引く</b>（引いたら番は終わり）。うまくいかなければ「↺ リセット」で番の最初に戻せます。</li>
   <li><b>手札を全部出したら勝ち！</b> 負けた人は残りタイルの合計（🐻は30点）がマイナス、勝った人はその合計がプラス。山がなくなって全員が出せなくなったら、残りの点がいちばん少ない人の勝ち。</li>
-  <li>操作：タイルをタップして選ぶ（いくつでも）→ 場の組の「＋」か「＋新しい組」をタップで移動。場のタイルも選んで動かせます（最初に出した後）。赤い枠の組は正しくありません。</li>
+  <li>操作：タイルをタップして選ぶ（いくつでも）→ 組の「＋」でその組に足すか、画面の「＋ 新しい組」で新しい組を作る。場に組があっても、新しい組はいつも作れます。場のタイルも、最初に出したあとは同じように動かせます。赤い枠の組は正しくありません。「↩ 手札へ」は、この番に自分が出したタイルと、ルールどおり戻せる🐻だけです。</li>
   <li>空いた席は <b>ふーさん🐻</b>（弱い／普通／強い）が担当します。</li>
 </ol><button class="btn main" id="rulesClose">とじる</button></div></div>
 <div id="toast"></div>
