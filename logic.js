@@ -4,9 +4,10 @@
 (function (root) {
   'use strict';
   var NT = 106, JK = [104, 105], HAND0 = 14, OPEN = 30, JOKER_PTS = 30;
-  function color(id) { return id >= 104 ? -1 : Math.floor((id % 52) / 13); }
-  function num(id) { return id >= 104 ? 0 : (id % 13) + 1; }
-  function isJ(id) { return id >= 104; }
+  function isJ(id) { return id === 104 || id === 105; }
+  // id 1000..1051 は「この色・数字だったら組が成り立つか」を調べるための仮タイル（場には出さない）
+  function color(id) { if (isJ(id)) return -1; if (id >= 1000) return Math.floor((id - 1000) / 13); return Math.floor((id % 52) / 13); }
+  function num(id) { if (isJ(id)) return 0; if (id >= 1000) return (id - 1000) % 13 + 1; return (id % 13) + 1; }
   function shuffle(a, rng) { for (var i = a.length - 1; i > 0; i--) { var j = Math.floor(rng() * (i + 1)), t = a[i]; a[i] = a[j]; a[j] = t; } return a; }
   // ---- 組の判定 ----
   // 戻り値 {ok, type:'group'|'run', val, order(表示順のid)} / {ok:false}
@@ -62,7 +63,10 @@
         if (!before[id]) { if (!hand[id]) return { err: 'bad' }; placed.push(id); }
       }
     }
-    for (var b in before) if (!seen[b]) return { err: 'kept' };          // 場のタイルを手札に戻すのは不可
+    // 場の数字タイルを手札へ持ち帰るのは不可。ジョーカーは同じ番に出し直すまで決定できない（公式ルール）
+    var missJ = false;
+    for (var b in before) if (!seen[b]) { if (isJ(+b)) missJ = true; else return { err: 'kept' }; }
+    if (missJ) return { err: G.opened[p] ? 'joker' : 'touch' };
     if (!placed.length) return { err: 'none' };
     for (k = 0; k < table.length; k++) if (!meld(table[k]).ok) return { err: 'invalid', at: k };
     var openPts = 0;
@@ -270,13 +274,51 @@
     if (toNew) table.push(list);
     return { table: table, hand: ws.hand.filter(keep) };
   }
-  // この番に手札から出したタイル（base の場に無かったもの）だけを手札へ戻す
-  function wsBack(ws, ids, baseTable) {
-    var was = {}, back = {}, list = [];
-    baseTable.forEach(function (m) { m.forEach(function (id) { was[id] = 1; }); });
-    ws.table.forEach(function (m) { m.forEach(function (id) { if (!was[id] && (ids || []).indexOf(id) >= 0 && !back[id]) { back[id] = 1; list.push(id); } }); });
-    if (!list.length) return ws;
-    return { table: ws.table.map(function (m) { return m.filter(function (id) { return !back[id]; }); }).filter(function (m) { return m.length; }), hand: ws.hand.concat(list) };
+  // ジョーカーを1枚、そのタイル自身と入れ替えても組が正しいままになる色・数字（公式：3枚グループは欠けているどちらの色でもよい）
+  function jokerNeed(ids, jid) {
+    var rest = [], i, c, n, out = [];
+    for (i = 0; i < ids.length; i++) if (ids[i] !== jid) rest.push(ids[i]);
+    for (c = 0; c < 4; c++) for (n = 1; n <= 13; n++) if (meld(rest.concat([1000 + c * 13 + (n - 1)])).ok) out.push({ c: c, n: n });
+    return out;
+  }
+  function meldWithout(ids, drop) {
+    var rest = [];
+    for (var i = 0; i < ids.length; i++) if (drop.indexOf(ids[i]) < 0) rest.push(ids[i]);
+    return meld(rest).ok;
+  }
+  // 同時に外しても残りが正しい組のままになるジョーカーだけ返す（2枚同時が無理なら1枚）
+  function liftableJokers(meldIds, cands) {
+    if (!cands.length) return [];
+    if (meldWithout(meldIds, cands)) return cands.slice();
+    for (var i = 0; i < cands.length; i++) if (meldWithout(meldIds, [cands[i]])) return [cands[i]];
+    return [];
+  }
+  // 手札へ戻せるタイル。
+  // ・この番に手札から場へ出したタイル
+  // ・場のジョーカーのうち、外したあともその組が正しいままのもの（初回の前は不可）
+  // 場の数字タイルは戻さない。穴をふさいでいるジョーカーも、代わりを組に入れるまでは戻さない。
+  function wsBackPlan(ws, ids, baseTable, opened) {
+    var was = {}, sel = {}, returning = {}, blocked = [], back = [];
+    (baseTable || []).forEach(function (m) { m.forEach(function (id) { was[id] = 1; }); });
+    (ids || []).forEach(function (id) { sel[id] = 1; });
+    ws.table.forEach(function (m) { m.forEach(function (id) { if (sel[id] && !was[id]) returning[id] = 1; }); });
+    ws.table.forEach(function (m) {
+      var after = m.filter(function (id) { return !returning[id]; }), js = [], liftSet = {};
+      after.forEach(function (id) { if (sel[id] && isJ(id) && was[id]) js.push(id); });
+      (opened ? liftableJokers(after, js) : []).forEach(function (id) { liftSet[id] = 1; returning[id] = 1; });
+      js.forEach(function (id) {
+        if (!liftSet[id]) blocked.push({ id: id, why: opened ? 'joker' : 'open', need: opened ? jokerNeed(after, id) : [] });
+      });
+      after.forEach(function (id) { if (sel[id] && was[id] && !isJ(id)) blocked.push({ id: id, why: opened ? 'table' : 'open' }); });
+    });
+    ws.table.forEach(function (m) { m.forEach(function (id) { if (returning[id] && back.indexOf(id) < 0) back.push(id); }); });
+    return { back: back, blocked: blocked };
+  }
+  function wsBack(ws, ids, baseTable, opened) {
+    var plan = wsBackPlan(ws, ids, baseTable, !!opened), back = {};
+    if (!plan.back.length) return ws;
+    plan.back.forEach(function (id) { back[id] = 1; });
+    return { table: ws.table.map(function (m) { return m.filter(function (id) { return !back[id]; }); }).filter(function (m) { return m.length; }), hand: ws.hand.concat(plan.back) };
   }
   // 作業領域のタイルが「番の最初の 場＋手札」とぴったり同じか（重複・増殖・消失の検出）
   function wsAudit(ws, baseTable, baseHand) {
@@ -313,6 +355,6 @@
   }
   function rngFrom(seed) { var s = seed >>> 0 || 1; return function () { s ^= s << 13; s >>>= 0; s ^= s >>> 17; s ^= s << 5; s >>>= 0; return s / 4294967296; }; }
   var api = { NT: NT, JK: JK, OPEN: OPEN, color: color, num: num, isJ: isJ, meld: meld, handPts: handPts, newGame: newGame, checkCommit: checkCommit, commit: commit, draw: draw, aiTurn: aiTurn, candidates: candidates, LEVELS: ['weak', 'normal', 'strong'], rngFrom: rngFrom, key: key,
-    wsNew: wsNew, wsIds: wsIds, wsMove: wsMove, wsBack: wsBack, wsAudit: wsAudit, wsDirty: wsDirty, meldWhy: meldWhy };
+    wsNew: wsNew, wsIds: wsIds, wsMove: wsMove, wsBack: wsBack, wsBackPlan: wsBackPlan, wsAudit: wsAudit, wsDirty: wsDirty, meldWhy: meldWhy, jokerNeed: jokerNeed };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.RK = api;
 })(this);

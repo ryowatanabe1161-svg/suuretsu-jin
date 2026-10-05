@@ -125,7 +125,7 @@
     log(G.pl[p].name + '：' + (res.pass ? '山がないのでパス' : '1枚引いた'));
     res.drew = true; afterMove(p, res); return res;
   }
-  var ERR = { invalid: '正しくない組があります（赤い枠）', open: '初回は手札だけで30点以上が必要です', touch: '初回は場のタイルを動かしたり付け足したりできません', kept: '場のタイルは手札に戻せません', none: 'タイルを出すか、1枚引いてね', bad: 'その並べ方はできません', turn: 'あなたの番ではありません' };
+  var ERR = { invalid: '正しくない組があります（赤い枠）', open: '初回は手札だけで30点以上が必要です', touch: '初回は場のタイルを動かしたり付け足したりできません', kept: '場のタイルは手札に戻せません', joker: 'ふーさんタイルは同じ番に場へ出し直してください', none: 'タイルを出すか、1枚引いてね', bad: 'その並べ方はできません', turn: 'あなたの番ではありません' };
   function hostAction(sid, m) {
     var R = host.room, G = R.G; if (!G || R.phase !== 'game') return null;
     var st = G.st, p = st.turn, o = G.pl[p];
@@ -389,6 +389,7 @@
     var v = lastView; if (!v || v.phase !== 'game') return;
     m.g = v.gameNo; m.n = v.g.n;
     if (host) { var err = hostAction(1, m); if (err && err !== 'STALE') toast(err); return; }
+    if (Q.has('preview')) { toast(m.t === 'commit' ? 'プレビューです。この並びはルール上、出せます' : 'プレビューでは山から引けません'); return; }
     var key = m.t + ':' + m.n;
     if (pending === key) return;
     if (send(m)) pending = key;
@@ -437,8 +438,32 @@
   //  画面（各端末）
   // =====================================================================
   var ui = { ws: null, sel: [], n: -1, gameKey: '', sort: 'c', sayId: null };
-  function tk(id, cls) {
-    if (L.isJ(id)) return '<i class="tk jk' + (cls ? ' ' + cls : '') + '" data-id="' + id + '">🐻<small>J</small></i>';
+  function needText(need) {
+    if (!need || !need.length) return '';
+    var parts = need.slice(0, 4).map(function (r) { return CN[r.c] + r.n; });
+    return parts.join('・') + (need.length > 4 ? 'など' : '');
+  }
+  function backReason(plan) {
+    if (!plan || !plan.blocked.length) return '';
+    var j = null, table = false, open = false;
+    plan.blocked.forEach(function (b) { if (b.why === 'joker' && !j) j = b; else if (b.why === 'table') table = true; else if (b.why === 'open') open = true; });
+    if (open) return '最初の30点を出すまでは、場のタイルは手札に戻せません';
+    if (j) { var t = needText(j.need); return t ? ('この🐻はまだ代わりが必要です（' + t + '）。そのタイルを同じ組に入れてから手札へ') : 'この🐻を外すと組が崩れます。代わりのタイルを同じ組に入れてから手札へ'; }
+    if (table) return '場の数字タイルは手札に戻せません。組の「＋」か「＋ 新しい組」で動かしてね';
+    return '';
+  }
+  function heldJoker(v) {
+    if (!ui.ws || !v || !v.g) return false;
+    var t0 = onTable0(v);
+    return ui.ws.hand.some(function (id) { return L.isJ(id) && t0[id]; });
+  }
+  function tk(id, cls, meldIds) {
+    if (L.isJ(id)) {
+      var need = meldIds && L.meld(meldIds).ok ? L.jokerNeed(meldIds, id) : [], sub = need.length === 1 ? String(need[0].n) : 'J', label = 'ジョーカー';
+      if (need.length === 1) label = 'ジョーカー（' + CN[need[0].c] + need[0].n + 'の代わり）';
+      else if (need.length) label = 'ジョーカー（' + needText(need) + 'のどれか）';
+      return '<i class="tk jk' + (cls ? ' ' + cls : '') + '" data-id="' + id + '" aria-label="' + label + '">🐻<small>' + sub + '</small></i>';
+    }
     var c = L.color(id); return '<i class="tk c' + c + (cls ? ' ' + cls : '') + '" data-id="' + id + '" aria-label="' + CN[c] + L.num(id) + '">' + L.num(id) + '<small>' + MARK[c] + '</small></i>';
   }
   function sortHand(h) {
@@ -515,7 +540,7 @@
     var h = table.map(function (m, k) {
       var M = L.meld(m), ord = M.ok ? M.order : m, chg = my && m.some(function (id) { return !t0[id]; });
       return '<div class="meld' + (M.ok ? '' : ' bad') + (chg ? ' chg' : '') + '" data-k="' + k + '">' + (my ? '<span class="vl">' + (M.ok ? M.val + '点' : '× ' + L.meldWhy(m)) + '</span>' : '') +
-        ord.map(function (id) { return tk(id, (ui.sel.indexOf(id) >= 0 ? 'sel' : '') + (my && !t0[id] ? ' mine' : '') + (lastSet[id] ? ' lastp' : '')); }).join('') +
+        ord.map(function (id) { return tk(id, (ui.sel.indexOf(id) >= 0 ? 'sel' : '') + (my && !t0[id] ? ' mine' : '') + (lastSet[id] ? ' lastp' : ''), m); }).join('') +
         (selOn ? '<span class="drop" data-drop="' + k + '">＋</span>' : '') + '</div>';
     }).join('');
     if (selOn) h += '<span class="newMeld" data-drop="new">＋ 新しい組</span>';
@@ -529,17 +554,26 @@
     else if (my) {
       var chk = changed() ? L.checkCommit(pseudoG(v), g.me, table) : { err: 'none' };
       if (!opened) { var pts = 0; table.forEach(function (m) { if (m.every(function (id) { return !t0[id]; })) { var M = L.meld(m); if (M.ok) pts += M.val; } }); msg = '初回：手札だけで <b>' + pts + ' / 30点</b>　'; }
+      var plan = L.wsBackPlan(ui.ws, ui.sel, g.table, opened), whyBack = backReason(plan);
       if (busy) msg += '送信中…';
-      else if (!changed()) msg += ui.sel.length ? '「＋」で置き場所をタップ' : 'タイルを選んで並べる／出せなければ 1枚引く';
-      else if (chk.err) msg += '<span class="warn">決定できません：' + whyText(chk, table, v) + '</span>';
-      else msg += '✔ 決定できます（' + (g.hand.length - hand.length) + '枚）';
+      else if (!changed()) msg += ui.sel.length ? '組の「＋」か、下の「＋ 新しい組」をタップ' : 'タイルを選んで並べる／出せなければ 1枚引く';
+      else if (chk.err) {
+        msg += '<span class="warn">決定できません：' + whyText(chk, table, v) + '</span>';
+        if (chk.err === 'joker' && table.some(function (m) { return !L.meld(m).ok; })) msg += '<br><span class="warn">赤い枠の組も直してね</span>';
+        else if (chk.err !== 'joker' && heldJoker(v)) msg += '<br><span class="warn">🐻も同じ番で組に出し直してね</span>';
+      } else msg += '✔ 決定できます（' + (g.hand.length - hand.length) + '枚）';
+      if (plan.back.some(L.isJ)) msg += '<br>この🐻は手札へ戻せます。戻したら、同じ番で組に出し直してね';
+      if (whyBack) msg += '<br><span class="warn">手札へ：' + whyBack + '</span>';
       $('commitBtn').disabled = busy || !changed() || !!chk.err;
+      $('backBtn').disabled = busy || !plan.back.length;
+      $('backBtn').title = plan.back.length ? '' : whyBack;
     } else if (g.wait > 0) msg = 'まもなく開始…';
     else msg = esc(cur.name) + ' が考えています…' + (host && g.curOff ? ' <button class="ib" style="background:var(--felt)" id="subBtn">' + BEAR + ' 代打ち</button>' : '');
     st.innerHTML = msg;
     $('ctrl').style.visibility = my ? 'visible' : 'hidden';
+    $('placeBar').classList.toggle('show', !!(my && ui.sel.length));
     $('resetBtn').disabled = busy || (!changed() && !ui.sel.length);
-    $('backBtn').disabled = busy || !ui.sel.some(function (id) { return !t0[id] && hand.indexOf(id) < 0; });
+    if (!my) { $('backBtn').disabled = true; $('backBtn').title = ''; }
     $('drawBtn').disabled = busy;
     $('drawBtn').textContent = g.pool ? '🀫 1枚引く' : 'パス';
     // 手札
@@ -559,7 +593,8 @@
     if (chk.err === 'open') return '初回は手札だけで30点以上（あと ' + (30 - (chk.pts || 0)) + '点）';
     if (chk.err === 'touch') return '初回は場の組に触れず、手札だけで新しい組を作ってね';
     if (chk.err === 'none') return '手札から1枚以上出してね（場の並べ替えだけでは決定できません）';
-    if (chk.err === 'kept') return '場にあったタイルは場に残してね';
+    if (chk.err === 'kept') return '場の数字タイルは手札に戻せません';
+    if (chk.err === 'joker') return '🐻は同じ番で組に出し直してね（手札に残したままでは決定できません）';
     var a = L.wsAudit(ui.ws, v.g.table, v.g.hand);
     if (a.dup.length) return 'タイルが重なっています（リセットしてね）';
     return '並びが番の最初とずれています（リセットしてね）';
@@ -580,10 +615,14 @@
   });
   $('resetBtn').onclick = function () { if (!lastView || !ui.ws) return; ui.ws = L.wsNew(lastView.g.table, lastView.g.hand); ui.sel = []; rerender(); };
   $('backBtn').onclick = function () {
-    if (!ui.ws) return; var t0 = onTable0(lastView);
-    if (ui.sel.some(function (id) { return t0[id]; })) toast('場にあったタイルは手札に戻せません');
-    ui.ws = L.wsBack(ui.ws, ui.sel, lastView.g.table);
-    ui.sel = ui.sel.filter(function (id) { return t0[id]; }); wsGuard(); rerender();
+    if (!ui.ws || !lastView || !lastView.g) return;
+    var opened = lastView.g.players[lastView.g.me].opened;
+    var plan = L.wsBackPlan(ui.ws, ui.sel, lastView.g.table, opened);
+    if (plan.blocked.length) { var why = backReason(plan); if (why) toast(why); }
+    if (!plan.back.length) return;
+    ui.ws = L.wsBack(ui.ws, ui.sel, lastView.g.table, opened);
+    var went = {}; plan.back.forEach(function (id) { went[id] = 1; });
+    ui.sel = ui.sel.filter(function (id) { return !went[id]; }); wsGuard(); rerender();
   };
   $('commitBtn').onclick = function () { if (!ui.ws || !wsGuard()) { rerender(); return; } act({ t: 'commit', table: ui.ws.table.map(function (m) { var M = L.meld(m); return M.ok ? M.order : m; }) }); };
   $('drawBtn').onclick = function () {
@@ -667,6 +706,21 @@
     if (m) act({ t: 'commit', table: m.table }); else act({ t: 'draw' });
   }, 120);
   // テスト・デバッグ用
-  window.__sr = { view: null, autoplay: false, ui: ui, act: function (m) { act(m); }, role: function () { return host ? 'host' : client ? 'client' : 'none'; }, hostRoom: function () { return host ? host.room : null; }, refresh: function () { if (host) hostBroadcast(); } };
+  window.__sr = { view: null, autoplay: false, ui: ui, render: render, act: function (m) { act(m); }, role: function () { return host ? 'host' : client ? 'client' : 'none'; }, hostRoom: function () { return host ? host.room : null; }, refresh: function () { if (host) hostBroadcast(); } };
+  if (Q.has('preview')) setTimeout(function () {
+    function P(c, n, k) { return (k || 0) * 52 + c * 13 + (n - 1); }
+    var table = [
+      [P(0, 1, 0), P(1, 1, 0), P(2, 1, 0)],
+      [P(0, 11, 0), P(1, 11, 0), P(2, 11, 0), P(3, 11, 0)],
+      [P(3, 1, 0), P(3, 2, 0), P(3, 3, 0), P(3, 4, 0)],
+      [P(2, 3, 0), P(2, 4, 0), P(2, 5, 0), P(2, 6, 0)],
+      [P(0, 6, 0), 104, P(0, 8, 0), P(0, 9, 0)],
+      [P(1, 5, 1), P(1, 6, 1), P(1, 7, 1), P(1, 8, 1), P(1, 9, 1), P(1, 10, 1)]
+    ];
+    var hand = [P(2, 1, 1), P(2, 2, 0), P(0, 7, 0), P(1, 10, 0), P(1, 11, 1)];
+    render({ t: 'state', phase: 'game', code: 'DEMO', you: 0, sid: 1, gameNo: 1, notice: null, opts: { seats: 2, lv: ['normal', 'normal', 'normal', 'normal'] }, seats: [],
+      g: { n: 1, turn: 0, over: false, me: 0, table: table, pool: 37, hand: hand, wait: 0, curOff: false, last: null, log: [{ id: 1, text: 'プレビュー：場が埋まっていても新しい組を作れます' }], say: null, winner: -1, result: null, hands: null,
+        players: [{ name: 'あなた', kind: 'human', connected: true, count: hand.length, opened: true }, { name: CPU_BASE, kind: 'cpu', lv: 'normal', connected: true, count: 12, opened: true }] } });
+  }, 30);
   renderTitle();
 })();
